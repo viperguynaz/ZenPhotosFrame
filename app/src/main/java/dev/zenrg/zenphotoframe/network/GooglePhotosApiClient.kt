@@ -45,22 +45,22 @@ interface GooglePhotosApiClient {
         "User-Agent: dev.zenrg.imageswitcher"
     )
     @GET("mediaItems")
-    fun listMediaItems(@Header("Authorization") token: String,
+    suspend fun listMediaItems(@Header("Authorization") token: String,
                        @Query("pageToken") nextPageToken: String? = null,
                        @Query("pageSize") pageSize: Int? = null,
                        @Query("excludeNonAppCreatedData") excludeNonAppCreatedData: Boolean? = null,
-    ): Call<MediaSearchResponse>
+    ): MediaSearchResponse
 
     @Headers(
         "Accept: application/vnd.zenrg.v1.full+json",
         "User-Agent: dev.zenrg.imageswitcher"
     )
     @POST("./mediaItems:search")
-    fun searchMediaItems(@Header("Authorization") token: String,
+    suspend fun searchMediaItems(@Header("Authorization") token: String,
                        @Query("pageToken") nextPageToken: String? = null,
                        @Query("pageSize") pageSize: Int? = null,
                        @Query("excludeNonAppCreatedData") excludeNonAppCreatedData: Boolean? = null,
-    ): Call<MediaSearchResponse>
+    ): MediaSearchResponse
 }
 
 /**

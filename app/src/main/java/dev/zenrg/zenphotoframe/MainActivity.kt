@@ -24,13 +24,9 @@ import com.google.android.gms.common.api.ApiException
 import kotlin.properties.Delegates
 
 class MainActivity : AppCompatActivity() {
-    // google one tap
     private lateinit var oneTapClient: SignInClient
     private lateinit var signInRequest: BeginSignInRequest
     private lateinit var credential: SignInCredential
-    //private var googleAccount: GoogleSignInAccount? = null
-
-    // android account manager
     private lateinit var androidAccount: Account
 
     private val tag = "zenx"
