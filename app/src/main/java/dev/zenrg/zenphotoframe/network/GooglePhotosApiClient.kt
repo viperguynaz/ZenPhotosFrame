@@ -4,10 +4,11 @@ import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import dev.zenrg.zenphotoframe.models.ErrorBody
 import dev.zenrg.zenphotoframe.models.MediaItem
+import dev.zenrg.zenphotoframe.models.MediaSearchRequest
 import dev.zenrg.zenphotoframe.models.MediaSearchResponse
 import okhttp3.ResponseBody
-import retrofit2.Call
 import retrofit2.Converter
+import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import retrofit2.http.*
@@ -49,7 +50,7 @@ interface GooglePhotosApiClient {
                        @Query("pageToken") nextPageToken: String? = null,
                        @Query("pageSize") pageSize: Int? = null,
                        @Query("excludeNonAppCreatedData") excludeNonAppCreatedData: Boolean? = null,
-    ): MediaSearchResponse
+    ): Response<MediaSearchResponse>
 
     @Headers(
         "Accept: application/vnd.zenrg.v1.full+json",
@@ -57,10 +58,8 @@ interface GooglePhotosApiClient {
     )
     @POST("./mediaItems:search")
     suspend fun searchMediaItems(@Header("Authorization") token: String,
-                       @Query("pageToken") nextPageToken: String? = null,
-                       @Query("pageSize") pageSize: Int? = null,
-                       @Query("excludeNonAppCreatedData") excludeNonAppCreatedData: Boolean? = null,
-    ): MediaSearchResponse
+                                 @Body request: MediaSearchRequest
+    ): Response<MediaSearchResponse>
 }
 
 /**

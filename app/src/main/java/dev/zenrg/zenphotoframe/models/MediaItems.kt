@@ -4,11 +4,11 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class MediaSearchRequest(
-    val albumId: String? = null,
-    val filters: Filters? = null,
-    val orderBy: String? = null,
-    val pageSize: String? = null,
-    val pageToken: String? = null
+    var albumId: String? = null,
+    var filters: Filters? = null,
+    var orderBy: String? = null,
+    var pageSize: String? = null,
+    var pageToken: String? = null
 )
 
 @Serializable

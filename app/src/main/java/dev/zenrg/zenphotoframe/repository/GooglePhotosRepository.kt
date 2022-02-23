@@ -1,10 +1,19 @@
-package dev.zenrg.zenphotoframe.network
+package dev.zenrg.zenphotoframe.repository
 
-import dev.zenrg.zenphotoframe.models.Album
+import android.util.Log
+import androidx.lifecycle.MutableLiveData
+import dev.zenrg.zenphotoframe.models.*
+import dev.zenrg.zenphotoframe.network.GooglePhotosApi
+import dev.zenrg.zenphotoframe.network.GooglePhotosApi.errorConverter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
-class MediaSearch {
-
-    val albums: List<Album> = listOf(
+@Suppress("BlockingMethodInNonBlockingContext")
+class GooglePhotosRepository {
+    private val client = GooglePhotosApi.retrofitClient
+    val mediaItemsLive = MutableLiveData<MutableList<MediaItem>>()
+    private val mediaItems = mutableListOf<MediaItem>()
+    private val albums:List<Album> = listOf(
         Album(
             id = "AOUbmae2mrHDBRKIyxpZDCFomIZIG3X8cEJSVCq8eFPqLqHUpkwqD-KcwIOY_-AhXVWcha5WBJdk",
             title = "Groot",
@@ -30,4 +39,40 @@ class MediaSearch {
             coverPhotoMediaItemId = "AOUbmaea7mtpkgA0C8qSSVNOwAoAcJojYgD3MIfVlIvM-tvKLCoZQd3SxeBk2jHRnBQ-D0bJr5AkM1TRPTt7X_cK-C7ghF97Sw"
         ),
     )
+
+    suspend fun searchMediaItems(token: String) {
+        var moreToRead = true
+        val mediaSearchRequest = MediaSearchRequest()
+        var mediaSearchResponse: MediaSearchResponse
+        for (album in albums) {
+            mediaSearchRequest.albumId = album.id
+            while (moreToRead) {
+                val response = client.searchMediaItems(token, mediaSearchRequest)
+                if (response.isSuccessful) {
+                    if (response.body() != null) {
+                        mediaSearchResponse = response.body()!!
+                        mediaSearchResponse.let {
+                            it.mediaItems?.let {
+                                    items -> mediaItems.addAll(items)
+                            }
+                            mediaSearchRequest.pageToken = mediaSearchResponse.nextPageToken
+                            moreToRead = !mediaSearchResponse.nextPageToken.isNullOrEmpty()
+                        }
+                    } else {
+                        moreToRead = false
+                        mediaSearchRequest.pageToken = null
+
+                        withContext(Dispatchers.IO) {
+                            val errorBody = errorConverter.convert(response.errorBody()!!)
+                            Log.e(
+                                "GooglePhotosRepository.searchMediaItems",
+                                "error: ${errorBody?.error?.message}"
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        mediaItemsLive.postValue(mediaItems)
+    }
 }
