@@ -2,6 +2,9 @@ package dev.zenrg.zenphotoframe
 
 import android.os.Bundle
 import android.util.Log
+import android.view.View
+import android.widget.ProgressBar
+import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -76,6 +79,8 @@ class MainActivity : AppCompatActivity() {
         viewModel.mediaItemsLive.observe(this) { items ->
             items?.let {
                 mediaItems = it
+                findViewById<TextView>(R.id.loadingText).text = "Loaded ${mediaItems.size} photos"
+                findViewById<ProgressBar>(R.id.progressBar).visibility = View.GONE
             }
         }
         viewModel.authToken.observe(this) {
