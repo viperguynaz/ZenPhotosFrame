@@ -43,8 +43,9 @@ interface GooglePhotosApiClient {
      */
     @Headers(
         "Accept: application/vnd.zenrg.v1.full+json",
-        "User-Agent: dev.zenrg.imageswitcher"
+        "User-Agent: dev.zenrg.zenphotoframe"
     )
+
     @GET("mediaItems")
     suspend fun listMediaItems(@Header("Authorization") token: String,
                        @Query("pageToken") nextPageToken: String? = null,
@@ -52,9 +53,17 @@ interface GooglePhotosApiClient {
                        @Query("excludeNonAppCreatedData") excludeNonAppCreatedData: Boolean? = null,
     ): Response<MediaSearchResponse>
 
+    /**
+     * url is the baseUrl from MediaItem: https://developers.google.com/photos/library/reference/rest/v1/mediaItems#MediaItem
+     * options is a query string add on to baseUrl: https://developers.google.com/photos/library/guides/access-media-items#base-urls
+     */
+    @GET
+    suspend fun getImage(@Header("Authorization") token: String,
+                         @Url url: String): Response<ResponseBody>
+
     @Headers(
         "Accept: application/vnd.zenrg.v1.full+json",
-        "User-Agent: dev.zenrg.imageswitcher"
+        "User-Agent: dev.zenrg.zenphotoframe"
     )
     @POST("./mediaItems:search")
     suspend fun searchMediaItems(@Header("Authorization") token: String,

@@ -1,8 +1,13 @@
 package dev.zenrg.zenphotoframe
 
+import android.graphics.BitmapFactory
+import android.graphics.drawable.BitmapDrawable
 import android.os.Bundle
 import android.util.Log
 import android.view.View
+import android.view.animation.AnimationUtils
+import android.widget.ImageSwitcher
+import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
@@ -23,11 +28,15 @@ import dev.zenrg.zenphotoframe.viewmodel.MainViewModel
 import kotlinx.coroutines.*
 import kotlinx.coroutines.Dispatchers
 import java.io.IOException
+import java.util.*
 import kotlin.properties.Delegates
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var signInClient: GoogleSignInClient
+    private lateinit var imgSwitcher: ImageSwitcher
+    private lateinit var bitmapDrawable: BitmapDrawable
+    private var random = Random()
     private val viewModel: MainViewModel by viewModels()
     private val tag = "zenx"
     private val scope = "oauth2:https://www.googleapis.com/auth/photoslibrary.readonly"
@@ -52,7 +61,8 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-
+        imgSwitcher = findViewById(R.id.imageSwitcher)
+        bitmapDrawable = BitmapDrawable(resources, BitmapFactory.decodeResource(resources ,R.drawable.p1))
         //TODO - look at refactoring sign-in to reactive process with observables
         // Build a GoogleSignInClient with the options specified by gso to refresh tokens
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -79,15 +89,40 @@ class MainActivity : AppCompatActivity() {
         viewModel.mediaItemsLive.observe(this) { items ->
             items?.let {
                 mediaItems = it
-                findViewById<TextView>(R.id.loadingText).text = "Loaded ${mediaItems.size} photos"
+                viewModel.getBitmap(mediaItems[random.nextInt(mediaItems.size)].baseUrl!!)
+                findViewById<TextView>(R.id.loadingText).visibility = View.GONE
                 findViewById<ProgressBar>(R.id.progressBar).visibility = View.GONE
+                buildImageSwitcher()
+                imgSwitcher.visibility = View.VISIBLE
             }
         }
         viewModel.authToken.observe(this) {
             Log.d(tag, "viewModel.authToken set -- token: $it}")
             viewModel.getMediaItems()
         }
+        viewModel.bitmapLive.observe(this) {
+            bitmapDrawable = BitmapDrawable(resources, it)
+        }
     }
+
+    private fun buildImageSwitcher() {
+        imgSwitcher.setOnClickListener {
+            imgSwitcher.setImageDrawable(bitmapDrawable)
+            viewModel.getBitmap(mediaItems[random.nextInt(mediaItems.size)].baseUrl!!)
+        }
+
+        imgSwitcher.setFactory {
+            val imgView = ImageView(applicationContext)
+            imgView.scaleType = ImageView.ScaleType.CENTER_INSIDE
+            imgView
+        }
+
+        imgSwitcher.setImageResource(R.drawable.p1)
+        viewModel.getBitmap(mediaItems[random.nextInt(mediaItems.size)].baseUrl!!)
+        imgSwitcher.inAnimation = AnimationUtils.loadAnimation(this, android.R.anim.fade_in)
+        imgSwitcher.outAnimation = AnimationUtils.loadAnimation(this, android.R.anim.fade_out)
+    }
+
 
     private fun silentSignIn() {
         val task: Task<GoogleSignInAccount> = signInClient.silentSignIn()

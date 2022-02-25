@@ -1,5 +1,8 @@
 package dev.zenrg.zenphotoframe.repository
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Rect
 import android.util.Log
 import androidx.lifecycle.MutableLiveData
 import dev.zenrg.zenphotoframe.models.*
@@ -7,11 +10,14 @@ import dev.zenrg.zenphotoframe.network.GooglePhotosApi
 import dev.zenrg.zenphotoframe.network.GooglePhotosApi.errorConverter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.InputStream
+import java.util.*
 
 @Suppress("BlockingMethodInNonBlockingContext")
 class GooglePhotosRepository {
     private val client = GooglePhotosApi.retrofitClient
     val mediaItemsLive = MutableLiveData<MutableList<MediaItem>>()
+    val bitmapLive = MutableLiveData<Bitmap>()
     private val mediaItems = mutableListOf<MediaItem>()
     private val albums:List<Album> = listOf(
         Album(
@@ -41,11 +47,10 @@ class GooglePhotosRepository {
     )
 
     suspend fun searchMediaItems(token: String) {
-        var moreToRead = true
-        val mediaSearchRequest = MediaSearchRequest()
-        var mediaSearchResponse: MediaSearchResponse
         for (album in albums) {
-            mediaSearchRequest.albumId = album.id
+            val mediaSearchRequest = MediaSearchRequest(albumId = album.id)
+            var mediaSearchResponse: MediaSearchResponse
+            var moreToRead = true
             while (moreToRead) {
                 val response = client.searchMediaItems(token, mediaSearchRequest)
                 if (response.isSuccessful) {
@@ -73,6 +78,15 @@ class GooglePhotosRepository {
                 }
             }
         }
-        mediaItemsLive.postValue(mediaItems)
+        mediaItemsLive.postValue(mediaItems.filter{ item -> item.mediaMetadata?.photo != null}.toMutableList())
+    }
+
+    suspend fun getBitmap(token: String, url: String) {
+        val response = client.getImage(token, url)
+        if (response.isSuccessful) {
+            if (response.body() != null) {
+                bitmapLive.postValue(BitmapFactory.decodeStream(response.body()!!.byteStream()))
+            }
+        }
     }
 }
