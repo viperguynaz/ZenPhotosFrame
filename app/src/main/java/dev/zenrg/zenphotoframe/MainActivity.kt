@@ -23,12 +23,11 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.Scope
 import com.google.android.gms.tasks.Task
-import dev.zenrg.zenphotoframe.models.MediaItem
 import dev.zenrg.zenphotoframe.viewmodel.MainViewModel
 import kotlinx.coroutines.*
-import kotlinx.coroutines.Dispatchers
 import java.io.IOException
 import java.util.*
+import kotlin.concurrent.fixedRateTimer
 import kotlin.properties.Delegates
 
 class MainActivity : AppCompatActivity() {
@@ -36,6 +35,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var signInClient: GoogleSignInClient
     private lateinit var imgSwitcher: ImageSwitcher
     private lateinit var bitmapDrawable: BitmapDrawable
+    private lateinit var timer: Timer
     private var random = Random()
     private val viewModel: MainViewModel by viewModels()
     private val tag = "zenx"
@@ -52,7 +52,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private var mediaItems = mutableListOf<MediaItem>()
+    private var mediaItems = mutableListOf<String>()
     private var token: String? by Delegates.observable(null) { property, oldValue, newValue ->
         Log.d(tag, "observable ${property.name}: $oldValue -> $newValue")
         newValue?.let { viewModel.setToken(it) }
@@ -63,6 +63,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         imgSwitcher = findViewById(R.id.imageSwitcher)
         bitmapDrawable = BitmapDrawable(resources, BitmapFactory.decodeResource(resources ,R.drawable.p1))
+
         //TODO - look at refactoring sign-in to reactive process with observables
         // Build a GoogleSignInClient with the options specified by gso to refresh tokens
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -86,20 +87,29 @@ class MainActivity : AppCompatActivity() {
         }
 
         // setup viewModel observers
-        viewModel.mediaItemsLive.observe(this) { items ->
+        viewModel.mediaItemIdsLive.observe(this) { items ->
             items?.let {
                 mediaItems = it
-                viewModel.getBitmap(mediaItems[random.nextInt(mediaItems.size)].baseUrl!!)
+                viewModel.getBitmap(mediaItems[random.nextInt(mediaItems.size)])
                 findViewById<TextView>(R.id.loadingText).visibility = View.GONE
                 findViewById<ProgressBar>(R.id.progressBar).visibility = View.GONE
                 buildImageSwitcher()
                 imgSwitcher.visibility = View.VISIBLE
+                timer = fixedRateTimer(name="imageLooper", initialDelay = 30000, period=20000, action= {
+                    runOnUiThread {
+                        imgSwitcher.setImageDrawable(bitmapDrawable)
+                        viewModel.getBitmap(mediaItems[random.nextInt(mediaItems.size)])
+                    }
+                })
+
             }
         }
         viewModel.authToken.observe(this) {
             Log.d(tag, "viewModel.authToken set -- token: $it}")
             viewModel.getMediaItems()
         }
+
+        // updates the imageswitcher image when a new bitmap is received
         viewModel.bitmapLive.observe(this) {
             bitmapDrawable = BitmapDrawable(resources, it)
         }
@@ -108,7 +118,7 @@ class MainActivity : AppCompatActivity() {
     private fun buildImageSwitcher() {
         imgSwitcher.setOnClickListener {
             imgSwitcher.setImageDrawable(bitmapDrawable)
-            viewModel.getBitmap(mediaItems[random.nextInt(mediaItems.size)].baseUrl!!)
+            viewModel.getBitmap(mediaItems[random.nextInt(mediaItems.size)])
         }
 
         imgSwitcher.setFactory {
@@ -118,7 +128,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         imgSwitcher.setImageResource(R.drawable.p1)
-        viewModel.getBitmap(mediaItems[random.nextInt(mediaItems.size)].baseUrl!!)
+        viewModel.getBitmap(mediaItems[random.nextInt(mediaItems.size)])
         imgSwitcher.inAnimation = AnimationUtils.loadAnimation(this, android.R.anim.fade_in)
         imgSwitcher.outAnimation = AnimationUtils.loadAnimation(this, android.R.anim.fade_out)
     }
@@ -183,5 +193,6 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         job.cancel()
+        timer.cancel()
     }
 }

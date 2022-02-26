@@ -54,12 +54,21 @@ interface GooglePhotosApiClient {
     ): Response<MediaSearchResponse>
 
     /**
+     * Get a single mediaItem - note the baseUrl expires in 60 minutes
+     */
+    @GET("mediaItems/{mediaItemId}")
+    suspend fun getMediaItem(@Header("Authorization") token: String,
+                               @Path("mediaItemId") mediaItemId: String,
+    ): Response<MediaItem>
+
+    /**
      * url is the baseUrl from MediaItem: https://developers.google.com/photos/library/reference/rest/v1/mediaItems#MediaItem
      * options is a query string add on to baseUrl: https://developers.google.com/photos/library/guides/access-media-items#base-urls
      */
     @GET
     suspend fun getImage(@Header("Authorization") token: String,
-                         @Url url: String): Response<ResponseBody>
+                         @Url url: String
+    ): Response<ResponseBody>
 
     @Headers(
         "Accept: application/vnd.zenrg.v1.full+json",
