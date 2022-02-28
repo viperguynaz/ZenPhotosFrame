@@ -5,6 +5,7 @@ import android.graphics.drawable.BitmapDrawable
 import android.os.Bundle
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
 import android.view.animation.AnimationUtils
 import android.widget.ImageSwitcher
 import android.widget.ImageView
@@ -13,6 +14,7 @@ import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.*
 import com.google.android.gms.auth.GoogleAuthException
 import com.google.android.gms.auth.GoogleAuthUtil
 import com.google.android.gms.auth.UserRecoverableAuthException
@@ -60,11 +62,12 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_main)
+        hideSystemBars()
         imgSwitcher = findViewById(R.id.imageSwitcher)
         bitmapDrawable = BitmapDrawable(resources, BitmapFactory.decodeResource(resources ,R.drawable.p1))
 
-        //TODO - look at refactoring sign-in to reactive process with observables
         // Build a GoogleSignInClient with the options specified by gso to refresh tokens
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
@@ -116,11 +119,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun buildImageSwitcher() {
-        imgSwitcher.setOnClickListener {
-            imgSwitcher.setImageDrawable(bitmapDrawable)
-            viewModel.getBitmap(mediaItems[random.nextInt(mediaItems.size)])
-        }
-
         imgSwitcher.setFactory {
             val imgView = ImageView(applicationContext)
             imgView.scaleType = ImageView.ScaleType.CENTER_INSIDE
@@ -133,6 +131,34 @@ class MainActivity : AppCompatActivity() {
         imgSwitcher.outAnimation = AnimationUtils.loadAnimation(this, android.R.anim.fade_out)
     }
 
+    private fun hideSystemBars() {
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(android.R.id.content)) { view, windowInsets ->
+            val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
+            // Apply the insets as a margin to the view. Here the system is setting
+            // only the bottom, left, and right dimensions, but apply whichever insets are
+            // appropriate to your layout. You can also update the view padding
+            // if that's more appropriate.
+            view.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+                updateMargins(
+                    left = insets.left,
+                    bottom = insets.right,
+                    right = insets.right,
+                )
+            }
+
+            // Return CONSUMED if you don't want want the window insets to keep being
+            // passed down to descendant views.
+            WindowInsetsCompat.CONSUMED
+        }
+
+        val windowInsetsController =
+            ViewCompat.getWindowInsetsController(findViewById(android.R.id.content)) ?: return   //findViewById(android.R.id.content)
+        // Configure the behavior of the hidden system bars
+        windowInsetsController.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_BARS_BY_TOUCH
+        // Hide both the status bar and the navigation bar
+        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
+    }
 
     private fun silentSignIn() {
         val task: Task<GoogleSignInAccount> = signInClient.silentSignIn()
