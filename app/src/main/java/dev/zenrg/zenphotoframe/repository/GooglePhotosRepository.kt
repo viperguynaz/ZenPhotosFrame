@@ -13,10 +13,10 @@ import kotlinx.coroutines.withContext
 @Suppress("BlockingMethodInNonBlockingContext")
 class GooglePhotosRepository {
     private val client = GooglePhotosApi.retrofitClient
-    val mediaItemIdsLive = MutableLiveData<MutableList<String>>()
+    val mediaItemIdsLive = MutableLiveData<MutableSet<String>>()
     val mediaItemLive = MutableLiveData<MediaItem>()
     val bitmapLive = MutableLiveData<Bitmap>()
-    private val mediaItemIds = mutableListOf<String>()
+    private val mediaItemIds = mutableSetOf<String>()
     private val albums:List<String> = listOf(
         "AOUbmae2mrHDBRKIyxpZDCFomIZIG3X8cEJSVCq8eFPqLqHUpkwqD-KcwIOY_-AhXVWcha5WBJdk",     // Groot
         "AOUbmae6_j2_W6dHgo9L6ZBv_Fk-Q3w8r4Bvr6pit_Y_CsQdrouVypJCaI2q_62zm4sJUQZGwExb",     // Roxie
@@ -25,7 +25,7 @@ class GooglePhotosRepository {
 
     suspend fun searchMediaItems(token: String) {
         for (album in albums) {
-            val mediaSearchRequest = MediaSearchRequest(album)
+            val mediaSearchRequest = MediaSearchRequest(albumId = album, pageSize = 100)
             var mediaSearchResponse: MediaSearchResponse
             var moreToRead = true
             while (moreToRead) {

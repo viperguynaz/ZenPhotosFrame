@@ -7,7 +7,7 @@ data class MediaSearchRequest(
     var albumId: String? = null,
     var filters: Filters? = null,
     var orderBy: String? = null,
-    var pageSize: String? = null,
+    var pageSize: Int? = null,
     var pageToken: String? = null
 )
 

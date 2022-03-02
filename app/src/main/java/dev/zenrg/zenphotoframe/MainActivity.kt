@@ -1,11 +1,17 @@
 package dev.zenrg.zenphotoframe
 
+import android.content.Context
+import android.content.SharedPreferences
 import android.graphics.BitmapFactory
 import android.graphics.drawable.BitmapDrawable
+import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.view.animation.AnimationUtils
 import android.widget.ImageSwitcher
 import android.widget.ImageView
@@ -38,14 +44,29 @@ class MainActivity : AppCompatActivity() {
     private lateinit var imgSwitcher: ImageSwitcher
     private lateinit var bitmapDrawable: BitmapDrawable
     private lateinit var timer: Timer
+    private lateinit var sharedPreferences: SharedPreferences
     private var random = Random()
     private val viewModel: MainViewModel by viewModels()
     private val tag = "zenx"
     private val scope = "oauth2:https://www.googleapis.com/auth/photoslibrary.readonly"
     private val job = Job()
     private val scopeIO = CoroutineScope(job + Dispatchers.IO)
-
     private var googleAccount: GoogleSignInAccount? = null
+
+    private var mediaItems = mutableSetOf<String>(
+        "AOUbmad5S_95sSPRn8RZldu02PDsD3z53z9XOEYHX8DY02XhDh2nAYjU_MWh9Jq4qdooFenMHqga_wLN8DhSHCXl9AvpofnqlQ",
+        "AOUbmadZiypM2-kAwAZKT_gtMCl_ixFOOokvMb8oPqPsFg82swVg9qH2vf6kD04RcGYaaIkUTrv8sxa9tbmIXR4mHLxFgxRaDg",
+        "AOUbmadzOHc5ab14broWyh63-MbodGLNSARhnCRMhLdd4F0ibwAG-7b7RlnD48LM8Pzc2Prp_SRVFwXyOVAHrxQ22varVw3N7g",
+        "AOUbmaeDKGO7RQOhZzraPDu8Xi-nbRSaS-11E_ng_xXADZPoWsosOjEVQW2OGd5rE1cT37KXsqCGKB5F5fImNdVrzw89aUT2fg",
+        "AOUbmae7Ul1YfwTswd6tDIwbyiG_TlxNKR8wndsWMCRDye_2nM2Itn-bsNYmA_PNcBl4_Iw5etfVW7FmSosPme32HKt6tzrMKQ",
+        "AOUbmafRU-TX0985ngDZC2G_NWqRlya5c3k0w50hM4MBTem-FPZPbZLhFGyAcxxvqF2UxXKFwbjRQT7RtP5gZqHsiWjYpQaAzg",
+        "AOUbmacZMxMoW3ni4d0uQUXqq02ATAC8zhuGheJvL6f4Ilyok5-r0R6lXUqZ2vyb5ZbnFitYHBgZ7YQyACN9X3tV2jYw74xSWQ",
+        "AOUbmafoVyhquIu42OVv_veIiagp8QdQgiP_gv_R4py_LX1-fzDqNWlSX57j29WnRxejLEE9tygdGNzs3BihkQMnjB8fO5A6cw",
+        "AOUbmaccjMEue3qFn3FP-I1U3HAsFOntBahu0aVtpbSzTs-wx6WL--wa4eSXnoFsYzFiHXSTbFAZi1WGrIGh9TqCsxOhbno73w",
+        "AOUbmadgZH0a19FKzbFvBThlWqQc36gU4wtlTUp1qiHYRM05sP1kWJLSSDONCsbe0iZuW6pv4C5JeKJ_caW7D5dXt_-GL7Ko0w",
+        "AOUbmaeHtJT5d_FV9Qbsfdmgv9dosbiD1HkSVkdeKqkECwB44puBQRBV9mfUofTuAFiiLeyIGC3mfw-vaXUkLTf1LRBYTby5Cg",
+        "AOUbmafQV324DW4UrvmKgMBrYtndfAjZ4Dqhqdz-Nk_E8oyvBqmdERxyhRIs5Uhnh6evGEiWpFwAHAeGhxnYJhGBpb1Hy4HVRA",
+    )
 
     private var signInActivity = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
@@ -54,20 +75,27 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private var mediaItems = mutableListOf<String>()
     private var token: String? by Delegates.observable(null) { property, oldValue, newValue ->
         Log.d(tag, "observable ${property.name}: $oldValue -> $newValue")
-        newValue?.let { viewModel.setToken(it) }
+        newValue?.let {
+            viewModel.setToken(it)
+        }
     }
+
+    private lateinit var wakeLock: PowerManager.WakeLock
+    private lateinit var wifiLock: WifiManager.WifiLock
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_main)
+        getCachedItems()
         hideSystemBars()
-        imgSwitcher = findViewById(R.id.imageSwitcher)
-        bitmapDrawable = BitmapDrawable(resources, BitmapFactory.decodeResource(resources ,R.drawable.p1))
+        signInWithGoogle()
+        setupViewModel()
+        buildImageSwitcher()
+    }
 
+    private fun signInWithGoogle() {
         // Build a GoogleSignInClient with the options specified by gso to refresh tokens
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
@@ -88,20 +116,32 @@ class MainActivity : AppCompatActivity() {
                 Log.d(tag, "GoogleSignIn.getAccountForScopes email: ${googleAccount!!.email}")
             }
         }
+    }
 
+    private fun getCachedItems() {
+        sharedPreferences = this.getPreferences(MODE_PRIVATE)
+        val mediaItemsCached: Set<String>? = sharedPreferences.getStringSet("zen_media_items", null)
+        if (mediaItemsCached != null) {
+            mediaItems = mediaItemsCached.toMutableSet()
+        }
+    }
+
+    private fun setupViewModel() {
         // setup viewModel observers
         viewModel.mediaItemIdsLive.observe(this) { items ->
             items?.let {
                 mediaItems = it
-                viewModel.getBitmap(mediaItems[random.nextInt(mediaItems.size)])
+                with(sharedPreferences.edit()) {
+                    putStringSet("zen_media_items", mediaItems)
+                    apply()
+                }
                 findViewById<TextView>(R.id.loadingText).visibility = View.GONE
                 findViewById<ProgressBar>(R.id.progressBar).visibility = View.GONE
-                buildImageSwitcher()
                 imgSwitcher.visibility = View.VISIBLE
-                timer = fixedRateTimer(name="imageLooper", initialDelay = 30000, period=20000, action= {
+                timer = fixedRateTimer(name = "imageLooper", initialDelay = 20000, period = 20000, action = {
                     runOnUiThread {
                         imgSwitcher.setImageDrawable(bitmapDrawable)
-                        viewModel.getBitmap(mediaItems[random.nextInt(mediaItems.size)])
+                        viewModel.getBitmap(mediaItems.elementAt(random.nextInt(mediaItems.size)))
                     }
                 })
 
@@ -109,6 +149,7 @@ class MainActivity : AppCompatActivity() {
         }
         viewModel.authToken.observe(this) {
             Log.d(tag, "viewModel.authToken set -- token: $it}")
+            viewModel.getBitmap(mediaItems.elementAt(random.nextInt(mediaItems.size)))
             viewModel.getMediaItems()
         }
 
@@ -119,19 +160,31 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun buildImageSwitcher() {
+        imgSwitcher = findViewById(R.id.imageSwitcher)
+        bitmapDrawable = BitmapDrawable(resources, BitmapFactory.decodeResource(resources ,R.drawable.p1))
         imgSwitcher.setFactory {
             val imgView = ImageView(applicationContext)
             imgView.scaleType = ImageView.ScaleType.CENTER_INSIDE
             imgView
         }
-
-        imgSwitcher.setImageResource(R.drawable.p1)
-        viewModel.getBitmap(mediaItems[random.nextInt(mediaItems.size)])
         imgSwitcher.inAnimation = AnimationUtils.loadAnimation(this, android.R.anim.fade_in)
         imgSwitcher.outAnimation = AnimationUtils.loadAnimation(this, android.R.anim.fade_out)
+        imgSwitcher.setImageDrawable(bitmapDrawable)
     }
 
     private fun hideSystemBars() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        wakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
+            newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ZenPhotoFrame::ZenWakelockTag").apply {
+                acquire()
+            }
+        }
+        wifiLock = (getSystemService(Context.WIFI_SERVICE) as WifiManager).run {
+            createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "ZenPhotoFrame:ZenWifiLock").apply {
+                acquire()
+            }
+        }
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(android.R.id.content)) { view, windowInsets ->
             val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
             // Apply the insets as a margin to the view. Here the system is setting
@@ -150,9 +203,12 @@ class MainActivity : AppCompatActivity() {
             // passed down to descendant views.
             WindowInsetsCompat.CONSUMED
         }
+        var windowInsetsController: WindowInsetsControllerCompat = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            ViewCompat.getWindowInsetsController(window.decorView) ?: return   //findViewById(android.R.id.content)
+        } else {
+            ViewCompat.getWindowInsetsController(findViewById(android.R.id.content)) ?: return
+        }
 
-        val windowInsetsController =
-            ViewCompat.getWindowInsetsController(findViewById(android.R.id.content)) ?: return   //findViewById(android.R.id.content)
         // Configure the behavior of the hidden system bars
         windowInsetsController.systemBarsBehavior =
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_BARS_BY_TOUCH
@@ -220,5 +276,7 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         job.cancel()
         timer.cancel()
+        wakeLock.release()
+        wifiLock.release()
     }
 }
