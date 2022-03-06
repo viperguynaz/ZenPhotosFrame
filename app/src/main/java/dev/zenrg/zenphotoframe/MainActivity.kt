@@ -58,21 +58,13 @@ class MainActivity : AppCompatActivity() {
     private val job = Job()
     private val scopeIO = CoroutineScope(job + Dispatchers.IO)
     private var googleAccount: GoogleSignInAccount? = null
+    private var silentSignInRunning = false
 
     // used to bootstrap mediaItems while we get signed in
     private var mediaItems = mutableSetOf<String>(
         "AOUbmad5S_95sSPRn8RZldu02PDsD3z53z9XOEYHX8DY02XhDh2nAYjU_MWh9Jq4qdooFenMHqga_wLN8DhSHCXl9AvpofnqlQ",
         "AOUbmadZiypM2-kAwAZKT_gtMCl_ixFOOokvMb8oPqPsFg82swVg9qH2vf6kD04RcGYaaIkUTrv8sxa9tbmIXR4mHLxFgxRaDg",
         "AOUbmadzOHc5ab14broWyh63-MbodGLNSARhnCRMhLdd4F0ibwAG-7b7RlnD48LM8Pzc2Prp_SRVFwXyOVAHrxQ22varVw3N7g",
-        "AOUbmaeDKGO7RQOhZzraPDu8Xi-nbRSaS-11E_ng_xXADZPoWsosOjEVQW2OGd5rE1cT37KXsqCGKB5F5fImNdVrzw89aUT2fg",
-        "AOUbmae7Ul1YfwTswd6tDIwbyiG_TlxNKR8wndsWMCRDye_2nM2Itn-bsNYmA_PNcBl4_Iw5etfVW7FmSosPme32HKt6tzrMKQ",
-        "AOUbmafRU-TX0985ngDZC2G_NWqRlya5c3k0w50hM4MBTem-FPZPbZLhFGyAcxxvqF2UxXKFwbjRQT7RtP5gZqHsiWjYpQaAzg",
-        "AOUbmacZMxMoW3ni4d0uQUXqq02ATAC8zhuGheJvL6f4Ilyok5-r0R6lXUqZ2vyb5ZbnFitYHBgZ7YQyACN9X3tV2jYw74xSWQ",
-        "AOUbmafoVyhquIu42OVv_veIiagp8QdQgiP_gv_R4py_LX1-fzDqNWlSX57j29WnRxejLEE9tygdGNzs3BihkQMnjB8fO5A6cw",
-        "AOUbmaccjMEue3qFn3FP-I1U3HAsFOntBahu0aVtpbSzTs-wx6WL--wa4eSXnoFsYzFiHXSTbFAZi1WGrIGh9TqCsxOhbno73w",
-        "AOUbmadgZH0a19FKzbFvBThlWqQc36gU4wtlTUp1qiHYRM05sP1kWJLSSDONCsbe0iZuW6pv4C5JeKJ_caW7D5dXt_-GL7Ko0w",
-        "AOUbmaeHtJT5d_FV9Qbsfdmgv9dosbiD1HkSVkdeKqkECwB44puBQRBV9mfUofTuAFiiLeyIGC3mfw-vaXUkLTf1LRBYTby5Cg",
-        "AOUbmafQV324DW4UrvmKgMBrYtndfAjZ4Dqhqdz-Nk_E8oyvBqmdERxyhRIs5Uhnh6evGEiWpFwAHAeGhxnYJhGBpb1Hy4HVRA",
     )
 
     private var signInActivity = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -87,7 +79,6 @@ class MainActivity : AppCompatActivity() {
             viewModel.setToken(it)
         }
     }
-
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -119,14 +110,15 @@ class MainActivity : AppCompatActivity() {
                 findViewById<TextView>(R.id.loadingText).visibility = View.GONE
                 findViewById<ProgressBar>(R.id.progressBar).visibility = View.GONE
                 imgSwitcher.visibility = View.VISIBLE
-                timer = fixedRateTimer(name = "imageLooper", initialDelay = 20000, period = 20000, action = {
+                timer = fixedRateTimer(name = "imageLooper", initialDelay = 30000, period = 30000, action = {
                     runOnUiThread {
-                        if (googleAccount?.expired()!!) {
+                        if (googleAccount?.expired()!! && !silentSignInRunning) {
                             Log.d(tag, "account expired - trying silent sign-on")
                             silentSignIn()
+                        } else {
+                            imgSwitcher.setImageDrawable(bitmapDrawable)
+                            viewModel.getBitmap(mediaItems.elementAt(random.nextInt(mediaItems.size)))
                         }
-                        imgSwitcher.setImageDrawable(bitmapDrawable)
-                        viewModel.getBitmap(mediaItems.elementAt(random.nextInt(mediaItems.size)))
                     }
                 })
 
@@ -209,19 +201,8 @@ class MainActivity : AppCompatActivity() {
             .requestScopes(Scope("https://www.googleapis.com/auth/photoslibrary.readonly"))
             .build()
         signInClient = GoogleSignIn.getClient(this, gso)
-        googleAccount = GoogleSignIn.getAccountForScopes(this, Scope(scope))
-        when {
-            googleAccount == null -> {
-                silentSignIn()
-            }
-            googleAccount!!.isExpired -> {
-                signInActivity.launch(signInClient.signInIntent)
-            }
-            else -> {
-                setAccount(googleAccount)
-                Log.d(tag, "GoogleSignIn.getAccountForScopes email: ${googleAccount!!.email}")
-            }
-        }
+        googleAccount = GoogleSignIn.getLastSignedInAccount(this)
+        setAccount(googleAccount)
     }
 
     @Suppress("BlockingMethodInNonBlockingContext")
@@ -261,12 +242,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun silentSignIn() {
+        silentSignInRunning = true
         try {
             val task: Task<GoogleSignInAccount> = signInClient.silentSignIn()
             if (task.isSuccessful) {
                 setAccount(task.result)
+                silentSignInRunning = false
             } else {
                 task.addOnCompleteListener {
+                    silentSignInRunning = false
                     try {
                         setAccount(it.result)
                     } catch (e: ApiException) {
@@ -276,6 +260,7 @@ class MainActivity : AppCompatActivity() {
             }
         } catch(e: ApiException) {
             Log.w(tag, "silentSignIn:task.isSuccessful API Exception statusCode: ${e.statusCode} | message: ${e.message}")
+            silentSignInRunning = false
         }
     }
 
