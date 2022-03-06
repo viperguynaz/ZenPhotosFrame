@@ -40,17 +40,11 @@ import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import kotlin.properties.Delegates
 
-
 class MainActivity : AppCompatActivity() {
-
     private lateinit var signInClient: GoogleSignInClient
     private lateinit var imgSwitcher: ImageSwitcher
     private lateinit var bitmapDrawable: BitmapDrawable
-    private lateinit var timer: Timer
     private lateinit var sharedPreferences: SharedPreferences
-    //    private lateinit var wakeLock: PowerManager.WakeLock
-    // add to manifest---> <uses-permission android:name="android.permission.WAKE_LOCK" />
-    //    private lateinit var wifiLock: WifiManager.WifiLock
 
     private var random = Random()
     private val viewModel: MainViewModel by viewModels()
@@ -59,7 +53,7 @@ class MainActivity : AppCompatActivity() {
     private val job = Job()
     private val scopeIO = CoroutineScope(job + Dispatchers.IO)
     private var googleAccount: GoogleSignInAccount? = null
-    private val exec: ScheduledThreadPoolExecutor = ScheduledThreadPoolExecutor(1);
+    private val exec: ScheduledThreadPoolExecutor = ScheduledThreadPoolExecutor(1)
 
     // used to bootstrap mediaItems while we get signed in
     private var mediaItems = mutableSetOf<String>(
@@ -144,23 +138,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun hideSystemBars() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
-//        wakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
-//            newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ZenPhotoFrame::ZenWakelockTag").apply {
-//                acquire()
-//            }
-//        }
-//        wifiLock = (getSystemService(Context.WIFI_SERVICE) as WifiManager).run {
-//            createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "ZenPhotoFrame:ZenWifiLock").apply {
-//                acquire()
-//            }
-//        }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(android.R.id.content)) { view, windowInsets ->
             val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-            // Apply the insets as a margin to the view. Here the system is setting
-            // only the bottom, left, and right dimensions, but apply whichever insets are
-            // appropriate to your layout. You can also update the view padding
-            // if that's more appropriate.
+            // Apply the insets as a margin to the view.
             view.updateLayoutParams<ViewGroup.MarginLayoutParams> {
                 updateMargins(
                     left = insets.left,
@@ -169,8 +150,7 @@ class MainActivity : AppCompatActivity() {
                 )
             }
 
-            // Return CONSUMED if you don't want want the window insets to keep being
-            // passed down to descendant views.
+            // Return CONSUMED so the window insets are not passed down to descendant views.
             WindowInsetsCompat.CONSUMED
         }
         val windowInsetsController: WindowInsetsControllerCompat = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -210,7 +190,7 @@ class MainActivity : AppCompatActivity() {
                     silentSignIn()
                 }
                 else -> {
-                    Log.d(tag, "setAccount idToken: ${googleAccount!!.idToken}")
+                    // schedule a token refresh when the account expires
                     exec.schedule({
                         silentSignIn()
                     }, googleAccount!!.expiresInSeconds(), TimeUnit.SECONDS)
@@ -272,7 +252,7 @@ class MainActivity : AppCompatActivity() {
         return javaClass.getDeclaredField("zaj").let {
             it.isAccessible = true
             val zaj = it.getLong(this)
-            return@let currentTimeMillis() / 1000L >= zaj;
+            return@let currentTimeMillis() / 1000L >= zaj
         }
     }
 
@@ -287,8 +267,6 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         job.cancel()
-        timer.cancel()
-//        wakeLock.release()
-//        wifiLock.release()
+        exec.shutdownNow()
     }
 }
