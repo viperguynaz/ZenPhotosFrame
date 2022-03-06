@@ -79,9 +79,9 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         getCachedItems()
-        hideSystemBars()
         signInWithGoogle()
         setupViewModel()
+        hideSystemBars()
         buildImageSwitcher()
     }
 
@@ -108,15 +108,19 @@ class MainActivity : AppCompatActivity() {
             }
         }
         viewModel.authToken.observe(this) {
-            Log.d(tag, "viewModel.authToken set -- token: $it")
             viewModel.getBitmap(mediaItems.elementAt(random.nextInt(mediaItems.size)))
             viewModel.getMediaItems()
         }
 
-        // updates the imageswitcher image when a new bitmap is received
+        /**
+         * updates the imageswitcher image when a new bitmap is received
+         * updates bitmapDrawable for the next swap
+         * schedules the next bitmap retrieval
+        */
         viewModel.bitmapLive.observe(this) {
             imgSwitcher.setImageDrawable(bitmapDrawable)
             bitmapDrawable = BitmapDrawable(resources, it)
+            // schedule next bitmap retrieval
             exec.schedule({
                 viewModel.getBitmap(mediaItems.elementAt(random.nextInt(mediaItems.size)))
             }, 30, TimeUnit.SECONDS)
