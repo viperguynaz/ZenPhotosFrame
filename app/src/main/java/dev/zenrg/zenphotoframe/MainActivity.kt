@@ -36,7 +36,8 @@ import kotlinx.coroutines.launch
 import java.io.IOException
 import java.lang.System.currentTimeMillis
 import java.util.*
-import kotlin.concurrent.fixedRateTimer
+import java.util.concurrent.ScheduledThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 import kotlin.properties.Delegates
 
 
@@ -58,7 +59,7 @@ class MainActivity : AppCompatActivity() {
     private val job = Job()
     private val scopeIO = CoroutineScope(job + Dispatchers.IO)
     private var googleAccount: GoogleSignInAccount? = null
-    private var silentSignInRunning = false
+    private val exec: ScheduledThreadPoolExecutor = ScheduledThreadPoolExecutor(1);
 
     // used to bootstrap mediaItems while we get signed in
     private var mediaItems = mutableSetOf<String>(
@@ -110,18 +111,6 @@ class MainActivity : AppCompatActivity() {
                 findViewById<TextView>(R.id.loadingText).visibility = View.GONE
                 findViewById<ProgressBar>(R.id.progressBar).visibility = View.GONE
                 imgSwitcher.visibility = View.VISIBLE
-                timer = fixedRateTimer(name = "imageLooper", initialDelay = 30000, period = 30000, action = {
-                    runOnUiThread {
-                        if (googleAccount?.expired()!! && !silentSignInRunning) {
-                            Log.d(tag, "account expired - trying silent sign-on")
-                            silentSignIn()
-                        } else {
-                            imgSwitcher.setImageDrawable(bitmapDrawable)
-                            viewModel.getBitmap(mediaItems.elementAt(random.nextInt(mediaItems.size)))
-                        }
-                    }
-                })
-
             }
         }
         viewModel.authToken.observe(this) {
@@ -132,7 +121,11 @@ class MainActivity : AppCompatActivity() {
 
         // updates the imageswitcher image when a new bitmap is received
         viewModel.bitmapLive.observe(this) {
+            imgSwitcher.setImageDrawable(bitmapDrawable)
             bitmapDrawable = BitmapDrawable(resources, it)
+            exec.schedule({
+                viewModel.getBitmap(mediaItems.elementAt(random.nextInt(mediaItems.size)))
+            }, 30, TimeUnit.SECONDS)
         }
     }
 
@@ -217,6 +210,10 @@ class MainActivity : AppCompatActivity() {
                     silentSignIn()
                 }
                 else -> {
+                    Log.d(tag, "setAccount idToken: ${googleAccount!!.idToken}")
+                    exec.schedule({
+                        silentSignIn()
+                    }, googleAccount!!.expiresInSeconds(), TimeUnit.SECONDS)
                     scopeIO.launch {
                         try {
                             token = GoogleAuthUtil.getToken(this@MainActivity, googleAccount!!.account!!, scope)
@@ -242,15 +239,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun silentSignIn() {
-        silentSignInRunning = true
         try {
             val task: Task<GoogleSignInAccount> = signInClient.silentSignIn()
             if (task.isSuccessful) {
                 setAccount(task.result)
-                silentSignInRunning = false
             } else {
                 task.addOnCompleteListener {
-                    silentSignInRunning = false
                     try {
                         setAccount(it.result)
                     } catch (e: ApiException) {
@@ -260,7 +254,6 @@ class MainActivity : AppCompatActivity() {
             }
         } catch(e: ApiException) {
             Log.w(tag, "silentSignIn:task.isSuccessful API Exception statusCode: ${e.statusCode} | message: ${e.message}")
-            silentSignInRunning = false
         }
     }
 
@@ -280,6 +273,14 @@ class MainActivity : AppCompatActivity() {
             it.isAccessible = true
             val zaj = it.getLong(this)
             return@let currentTimeMillis() / 1000L >= zaj;
+        }
+    }
+
+    private fun GoogleSignInAccount.expiresInSeconds() : Long {
+        return javaClass.getDeclaredField("zaj").let {
+            it.isAccessible = true
+            val zaj = it.getLong(this)
+            return@let zaj - (currentTimeMillis() / 1000L)
         }
     }
 
